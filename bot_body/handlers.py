@@ -1,4 +1,4 @@
-import sqlite3
+import sqlite3, aiohttp, asyncio, logging
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
@@ -8,40 +8,29 @@ import requests
 
 user_router = Router()
 
-def get_user_tasks(telegram_id):
-    with sqlite3.connect('bot_db') as con:
-        cursor = con.cursor()
-        cursor.execute("""
-        SELECT title, deadline 
-        FROM bot_tasks 
-        WHERE user_telegram_id = ?
-        """, [str(telegram_id)])
-        return cursor.fetchall()
-
 @user_router.message(CommandStart())
 async def cmd_start(message: Message):
-    token = message.get_args()
     await message.answer('Привет! Этот бот будет присылать тебе уведомления о просроченных заданиях на сайте ToDo-List')
-    if token:
-        response = requests.post(
-            f'{settings.DJANGO_SITE_URL}/api/confirm-telegram/',
-            json={'token': token, 'chat_id': message.chat.id}
-        )
-        if response.status_code == 200:
-            await message.answer("✅ Ваш аккаунт успешно привязан!")
-        else:
-            await message.answer("❌ Неверный токен привязки")
-
-@user_router.message(Command('check_tasks'))
-async def check_tasks(message: Message):
-    tasks = get_user_tasks(message.from_user.id)
-
-    if not tasks:
-        await message.answer('У вас нет просроченных задач')
-        return
     
-    response = ['Просроченные задачи:']
-    for title, deadline in tasks:
-        response.append(f'{title} - до {deadline[:10]}')
 
-    await message.answer('\n'.join(response))
+async def check_tasks():
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get('http://yourdjango.com/api/get_overdue_tasks/') as resp:
+                    data = await resp.json()
+                    for telegram_id, user_data in data.items():
+                        for task in user_data['tasks']:
+                            message = (
+                                f"🚨 Просроченная задача!\n"
+                                f"Название: {task['title']}\n"
+                                f"Дедлайн: {task['due_date']}"
+                            )
+                            await bot.send_message(
+                                chat_id=user_data['chat_id'],
+                                text=message
+                            )
+        except Exception as e:
+            logging.error(f"Ошибка при проверке задач: {e}")
+        
+        await asyncio.sleep(3600)  # Проверка каждый час
