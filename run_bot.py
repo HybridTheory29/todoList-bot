@@ -1,33 +1,36 @@
-import asyncio
-import aiohttp
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 import logging
-
+from aiohttp import web
+from aiogram import Bot
 from decouple import config
-from bot_body.handlers import user_router
 
-bot = Bot(config('BOT_TOKEN'), default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
+logging.basicConfig(level=logging.INFO)
 
-async def main():
-    dp.include_router(user_router)
-    dp.startup.register(startup)
-    dp.shutdown.register(shutdown)
+bot = Bot(config('BOT_TOKEN'))
 
-    await dp.start_polling(bot)
+routes = web.RouteTableDef()
 
-async def startup(dispatcher: Dispatcher):
-#    await async_main()
-    print('Starting up...')
+@routes.post("/notify/")
+async def notify(request):
+    if request.headers.get("Authorization") != f"Bearer секрет":
+        return web.Response(status=403, text="Forbidden")
+    try:
+        data = await request.json()
+        title = data.get("title")
+        deadline = data.get("deadline")
 
+        if not title or not deadline:
+            return web.Response(status=400, text="Missing title or deadline")
 
-async def shutdown(dispatcher: Dispatcher):
-    print('Shutting down...')
+        message = f"🔔 Просрочена задача:\n\n• {title} (до {deadline})"
+        await bot.send_message(config('CHAT_ID'), text=message)
+        return web.Response(text="Message sent")
+
+    except Exception as e:
+        logging.error(f"Ошибка обработки запроса: {e}")
+        return web.Response(status=500, text="Server error")
+
+app = web.Application()
+app.add_routes(routes)
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    web.run_app(app, port=8080)
