@@ -11,7 +11,7 @@ routes = web.RouteTableDef()
 
 @routes.post("/notify/")
 async def notify(request):
-    if request.headers.get("Authorization") != f"Bearer секрет":
+    if request.headers.get("Authorization") != f"Bearer secret":
         return web.Response(status=403, text="Forbidden")
     try:
         data = await request.json()
