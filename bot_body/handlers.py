@@ -5,7 +5,7 @@ from aiogram.filters import CommandStart, Command
 from datetime import datetime
 import pytz
 
-from standart_run import bot
+from main import bot
 import requests
 
 user_router = Router()
