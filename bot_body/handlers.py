@@ -1,13 +1,11 @@
-import sqlite3, aiohttp, asyncio, logging, types
 from aiogram import Router, F
-from aiogram.fsm.context import FSMContext
 from bot_body.database.models import save_user, get_site_user_id
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
+from datetime import datetime
+import pytz
 
 from standart_run import bot
-from decouple import config
 import requests
 
 user_router = Router()
@@ -16,11 +14,11 @@ user_router = Router()
 class Register(StatesGroup):
     waiting_for_user_id = State()
 '''
-@user_router.message(CommandStart())
+@user_router.message(CommandStart(deep_link=True))
 async def cmd_start(message: Message):
-    args = message.get_args()
-    if args:
-        token = args.strip()
+    args = message.text.split(" ", 1)
+    if len(args) > 1:
+        token = args[1].strip()
         try:
             response = requests.get(f"https://todolist29.pythonanywhere.com/api/telegram-auth/?token={token}")
             response.raise_for_status()
@@ -67,7 +65,12 @@ async def cmd_ckeck_tasks(message: Message):
     if tasks:
         message = "🔔 Просроченные задачи:\n\n"
         for task in tasks:
-            message += f"• {task['title']} (до {task['deadline']})\n"
+            utc = pytz.utc
+            utc_time = datetime.strptime(task['deadline'], "%Y-%m-%dT%H:%M:%SZ")
+            utc_time = utc.localize(utc_time)
+            moscow_tz = pytz.timezone("Europe/Moscow")
+            moscow_time = utc_time.astimezone(moscow_tz)
+            message += f"• {task['title']} (до {moscow_time.strftime("%d.%m.%Y %H:%M")})\n"
     else:
         message = "✅ Нет просроченных задач"
 
